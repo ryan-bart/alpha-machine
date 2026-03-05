@@ -14,7 +14,7 @@ Future upgrades will include performance metrics, equity curve plots, parameter 
 ---
 
 ## Project Structure
-
+'''
 
 alpha-machine/
 ├── data/
@@ -29,6 +29,6 @@ alpha-machine/
 ├── requirements.txt       # Dependencies
 └── README.md
 
-
+'''
 ---
 
