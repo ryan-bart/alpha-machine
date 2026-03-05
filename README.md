@@ -16,17 +16,17 @@ Future upgrades will include performance metrics, equity curve plots, parameter 
 ## Project Structure
 
 
-quant-trading-system/
+alpha-machine/
 ├── data/
-│ └── loader.py # Loads historical data from yfinance into Polars
+│   └── loader.py          # Loads historical data from yfinance into Polars
 ├── strategies/
-│ ├── base_strategy.py # Base strategy interface
-│ └── ma_crossover.py # Simple moving average crossover strategy
+│   ├── base_strategy.py   # Base strategy interface
+│   └── ma_crossover.py    # Simple moving average crossover strategy
 ├── backtester/
-│ ├── portfolio.py # Portfolio simulation with trade tracking
-│ └── engine.py # Backtest engine that runs strategy on data
-├── run_backtest.py # Main script to run backtest
-├── requirements.txt # Dependencies
+│   ├── portfolio.py       # Portfolio simulation with trade tracking
+│   └── engine.py          # Backtest engine that runs strategy on data
+├── run_backtest.py        # Main script to run backtest
+├── requirements.txt       # Dependencies
 └── README.md
 
 
