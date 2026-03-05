@@ -14,8 +14,8 @@ Future upgrades will include performance metrics, equity curve plots, parameter 
 ---
 
 ## Project Structure
-'''
 
+```
 alpha-machine/
 ├── data/
 │   └── loader.py          # Loads historical data from yfinance into Polars
@@ -28,7 +28,6 @@ alpha-machine/
 ├── run_backtest.py        # Main script to run backtest
 ├── requirements.txt       # Dependencies
 └── README.md
-
-'''
+```
 ---
 
