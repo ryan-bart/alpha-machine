@@ -1,6 +1,6 @@
 # Alpha-Machine
 
-A multi-factor stock scoring system that screens the S&P 500 and outputs actionable monthly stock recommendations. Built with Python, Polars, and free data sources (yfinance, Wikipedia, FRED).
+A multi-factor stock scoring system that screens the S&P 500 and outputs actionable quarterly stock recommendations. Built with Python, Polars, and free data sources (yfinance, Wikipedia, FRED).
 
 ---
 
@@ -8,17 +8,17 @@ A multi-factor stock scoring system that screens the S&P 500 and outputs actiona
 
 Alpha-Machine looks at every stock in the S&P 500 and ranks them using 10 different measurable signals (called "factors") derived from price and volume data. It combines those rankings into a single composite score per stock, then picks the top 20 to form a portfolio. Think of it like a systematic stock screener that replaces gut feelings with math.
 
-**It answers one question:** "If I had to pick 20 stocks to hold for the next month, which ones have the best combination of momentum, stability, and volume characteristics?"
+**It answers one question:** "If I had to pick 20 stocks to hold for the next quarter, which ones have the best combination of momentum, stability, and volume characteristics?"
 
 ### What It Recommends
 
-When you run `python run_score.py`, you get a ranked list of 20 stocks to buy. The intended holding period is **one month** — on the first trading day of each month, you would:
+When you run `python run_score.py`, you get a ranked list of 20 stocks to buy. The intended holding period is **one quarter** — on the first trading day of each quarter, you would:
 
 1. Sell any stocks that dropped out of the top 20
 2. Buy any new stocks that entered the top 20
 3. Rebalance so each position is an equal ~5% of your portfolio
 
-You are not meant to day-trade these picks or hold them for years. The factors are tuned for a **30-90 day horizon** where momentum and mean-reversion effects are strongest.
+You are not meant to day-trade these picks or hold them for years. The factors are tuned for a **quarterly horizon** where momentum and low-volatility effects are strongest.
 
 ### Why Would This Work?
 
@@ -28,7 +28,7 @@ The strategy is based on well-documented effects in academic finance:
 - **Low volatility**: Less volatile stocks tend to deliver better risk-adjusted returns than highly volatile ones. The "low-volatility anomaly" contradicts the textbook idea that more risk = more reward.
 - **Volume confirmation**: Rising prices on rising volume are more likely to continue than rising prices on falling volume.
 
-None of these are guaranteed to work in any given month. They are statistical tendencies that show up over many months and many stocks.
+None of these are guaranteed to work in any given quarter. They are statistical tendencies that show up over many quarters and many stocks.
 
 ---
 
@@ -40,25 +40,27 @@ Each stock gets scored on 10 factors. Every factor produces a single number per 
 
 | # | Factor | What It Measures | Weight |
 |---|--------|-----------------|--------|
-| 1 | **Momentum 12-1mo** | Price change over the past year, excluding the most recent month (to avoid short-term reversal noise) | 20% |
+| 1 | **Momentum 12-1mo** | Price change over the past year, excluding the most recent month (to avoid short-term reversal noise) | 25% |
 | 2 | **Momentum 6-1mo** | Same idea but over 6 months — captures medium-term trends | 15% |
 | 3 | **Relative Strength 3mo** | Price change over the past 3 months — shorter-term momentum | 10% |
-| 4 | **Short-Term Reversal** | Price change over the past week, *inverted* — stocks that dropped recently may bounce back | 5% |
+| 4 | **Short-Term Reversal** | Price change over the past week, *inverted* — disabled (0% weight) because it decays too fast for quarterly rebalancing | 0% |
 | 5 | **Distance from 50-day MA** | How far the stock is above its 50-day moving average, *inverted* — prefers stocks near their average rather than overextended | 5% |
-| 6 | **Volume Trend** | Is trading volume increasing or decreasing? Compares recent 20-day average volume to 60-day average | 10% |
+| 6 | **Volume Trend** | Is trading volume increasing or decreasing? Compares recent 20-day average volume to 60-day average | 5% |
 | 7 | **OBV Slope** | On-Balance Volume trend — tracks whether volume flows into or out of a stock over 40 days | 5% |
-| 8 | **Realized Volatility** | How much the stock's price fluctuates day-to-day (60-day window), *inverted* — calmer stocks score higher | 10% |
+| 8 | **Realized Volatility** | How much the stock's price fluctuates day-to-day (60-day window), *inverted* — calmer stocks score higher | 15% |
 | 9 | **Volatility Trend** | Is volatility increasing or decreasing? *Inverted* — stocks with declining volatility score higher | 5% |
 | 10 | **Price Consistency** | What fraction of the last 60 trading days had positive returns — measures how "steadily" a stock has been climbing | 15% |
 
 "Inverted" means lower raw values get higher scores. For example, a stock with low volatility scores *better* on the realized volatility factor.
+
+The weights are tuned for quarterly rebalancing: persistent signals (momentum, low-vol, price consistency) are weighted heavily, while fast-decaying signals (short-term reversal, volume spikes) are reduced or disabled.
 
 ### How Factors Become Scores
 
 1. **Compute raw factor values** for every stock on a given date
 2. **Percentile rank** each factor across all ~500 stocks. The stock with the highest momentum gets a rank of 1.0, the lowest gets 0.0, and everything else falls in between. This makes factors comparable — you can't directly compare a momentum percentage to a volatility number, but you can compare "top 10% in momentum" to "top 10% in volatility"
 3. **Weighted average** of all 10 percentile ranks using the weights above, producing a single composite score between 0 and 1
-4. **Select the top 20** stocks by composite score, subject to constraints (see Portfolio Construction below)
+4. **Select the top 20** stocks by composite score
 
 ### No Lookahead Bias
 
@@ -70,9 +72,8 @@ A critical rule: when scoring stocks on date X, only data from date X and earlie
 
 Picking the top 20 stocks isn't quite as simple as sorting by score. There are constraints:
 
-- **Sector cap (25%)**: No more than 25% of the portfolio can be in any one sector (e.g., Information Technology). This prevents the portfolio from becoming a bet on a single industry. If the top 20 has 8 tech stocks, only 5 get in and the rest are replaced by the next-best stocks from other sectors.
 - **Minimum score**: A stock must be above the 50th percentile composite score to be included. If fewer than 20 stocks pass this bar, the portfolio holds fewer positions (and implicitly holds cash).
-- **Turnover dampening**: A stock already in the portfolio doesn't get removed unless it drops below rank 30. This prevents churning — without this rule, a stock oscillating between rank 19 and 21 would be bought and sold every month, generating unnecessary trading costs.
+- **Turnover dampening**: A stock already in the portfolio doesn't get removed unless it drops below rank 15. This prevents churning — without this rule, a stock oscillating between rank 19 and 21 would be bought and sold every quarter, generating unnecessary trading costs.
 - **Equal weight**: Each position gets an equal ~5% allocation. This is simpler and more diversified than market-cap weighting where a few mega-caps dominate.
 
 ---
@@ -83,11 +84,11 @@ Backtesting answers: "If I had followed this exact strategy in the past, how wou
 
 ### How It Works
 
-The backtester simulates running the strategy month by month starting from the beginning of the historical data:
+The backtester simulates running the strategy quarter by quarter starting from the beginning of the historical data:
 
-1. On the first trading day of Month 1, score all stocks using only data available at that point. Pick the top 20. "Buy" them.
-2. On the first trading day of Month 2, score all stocks again (still only using data up to that day). Sell any that dropped out, buy new ones. Track the portfolio value.
-3. Repeat for every month in the dataset.
+1. On the first trading day of Quarter 1, score all stocks using only data available at that point. Pick the top 20. "Buy" them.
+2. On the first trading day of Quarter 2, score all stocks again (still only using data up to that day). Sell any that dropped out, buy new ones. Track the portfolio value.
+3. Repeat for every quarter in the dataset.
 
 At the end, you have a full history of what the portfolio would have been worth on every day — this is the **equity curve**.
 
@@ -103,9 +104,9 @@ The biggest risk in backtesting is **overfitting** — tuning your strategy to p
 
 Alpha-Machine guards against this in three ways:
 
-1. **Out-of-sample holdout**: The most recent 12 months of data are reserved as a "holdout" set. The strategy is developed and evaluated on older data first, then checked against the holdout. If performance collapses on the holdout, it's a red flag for overfitting.
+1. **Out-of-sample holdout**: The most recent 4 quarters of data are reserved as a "holdout" set. The strategy is developed and evaluated on older data first, then checked against the holdout. If performance collapses on the holdout, it's a red flag for overfitting.
 2. **No parameter optimization**: The factor weights and thresholds are set based on academic research and intuition, not by searching for the combination that maximizes backtest returns.
-3. **Simple, transparent rules**: 10 factors, fixed weights, monthly rebalance. There are very few "knobs to turn," which limits the opportunity to overfit.
+3. **Simple, transparent rules**: 10 factors, fixed weights, quarterly rebalance. There are very few "knobs to turn," which limits the opportunity to overfit.
 
 ---
 
@@ -193,7 +194,7 @@ alpha-machine/
 │   ├── construct.py             # Selects top N stocks with constraints
 │   └── risk.py                  # Sector exposure and concentration checks
 ├── backtester/
-│   ├── engine.py                # Walk-forward monthly backtest simulation
+│   ├── engine.py                # Walk-forward quarterly backtest simulation
 │   └── metrics.py               # Performance metric calculations
 ├── output/
 │   ├── report.py                # Generates markdown recommendation report
@@ -201,6 +202,7 @@ alpha-machine/
 ├── cache/                       # Local data cache (gitignored)
 ├── run_score.py                 # Score today's S&P 500 and produce recommendations
 ├── run_backtest.py              # Run historical backtest and generate performance report
+├── run_optimize.py              # Weight optimizer (experimental)
 ├── BACKLOG.md                   # Future work: options, ML scoring, paid data
 └── requirements.txt
 ```
@@ -244,7 +246,7 @@ All data is free and requires no API keys:
 ## Limitations
 
 - **Survivorship bias**: The system uses today's S&P 500 list for the entire backtest. Stocks that were removed from the index (because they crashed, got acquired, etc.) are not included, which makes historical results look slightly better than they really were.
-- **No transaction costs**: The backtest doesn't account for trading commissions or bid-ask spreads. With 20 stocks rebalanced monthly, real-world costs would reduce returns by roughly 0.5-1% annually.
+- **No transaction costs**: The backtest doesn't account for trading commissions or bid-ask spreads. With 20 stocks rebalanced quarterly, real-world costs would be modest but nonzero.
 - **Price-only factors**: The system only uses price and volume data. Fundamental data (earnings, revenue, debt) could improve accuracy but requires paid data sources.
 - **3-year history**: With only ~3 years of data from yfinance, the backtest covers limited market conditions. A full market cycle (bull market, bear market, recovery) typically takes 7-10 years.
 
