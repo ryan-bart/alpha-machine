@@ -45,12 +45,15 @@ def compute_all_factors(prices: pl.DataFrame) -> pl.DataFrame:
     return combined
 
 
-def composite_score(df: pl.DataFrame) -> pl.DataFrame:
+def composite_score(df: pl.DataFrame, weights: dict | None = None) -> pl.DataFrame:
     """Compute weighted composite score from percentile ranks."""
+    if weights is None:
+        weights = FACTOR_WEIGHTS
+
     score_expr = pl.lit(0.0)
     for factor in ALL_FACTORS:
         rank_col = f"{factor.name()}_rank"
-        weight = FACTOR_WEIGHTS[factor.name()]
+        weight = weights[factor.name()]
         score_expr = score_expr + pl.col(rank_col) * weight
 
     df = df.with_columns(score_expr.alias("composite_score"))

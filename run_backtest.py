@@ -7,11 +7,20 @@ from scoring.missing import filter_insufficient_history
 from backtester.engine import run_backtest
 from backtester.metrics import compute_metrics, compute_benchmark_metrics
 from output.plots import plot_equity_curve, plot_monthly_heatmap
+from config.settings import FACTOR_WEIGHTS, TOP_N, SECTOR_CAP, SELL_THRESHOLD_RANK, REBALANCE_FREQ, WEIGHTING
 import polars as pl
 
 
 def main():
     print("=== Alpha-Machine: Historical Backtest ===\n")
+
+    print("Settings:")
+    print(f"  Positions: {TOP_N} | Weighting: {WEIGHTING} | Sector cap: {'off' if SECTOR_CAP >= 1.0 else f'{SECTOR_CAP:.0%}'} | Sell threshold: rank {SELL_THRESHOLD_RANK} | Rebalance: {'quarterly' if REBALANCE_FREQ == 'QS' else 'monthly'}")
+    print(f"  Weights:")
+    for name, w in FACTOR_WEIGHTS.items():
+        if w > 0:
+            print(f"    {name:25s} {w:.0%}")
+    print()
 
     print("1. Fetching universe and prices...")
     universe = get_sp500_tickers()
@@ -40,27 +49,40 @@ def main():
     full_metrics = compute_metrics(equity_curve, risk_free)
     is_metrics = compute_metrics(is_curve, risk_free) if not is_curve.is_empty() else {}
     oos_metrics = compute_metrics(oos_curve, risk_free) if not oos_curve.is_empty() else {}
-    bench_metrics = compute_benchmark_metrics(prices, risk_free, "SPY")
+
+    bench_full = compute_benchmark_metrics(prices, risk_free, "SPY")
+
+    is_start = is_curve["date"].min() if not is_curve.is_empty() else None
+    is_end = is_curve["date"].max() if not is_curve.is_empty() else None
+    oos_start = oos_curve["date"].min() if not oos_curve.is_empty() else None
+    oos_end = oos_curve["date"].max() if not oos_curve.is_empty() else None
+
+    bench_is = compute_benchmark_metrics(prices, risk_free, "SPY", is_start, is_end) if is_start else {}
+    bench_oos = compute_benchmark_metrics(prices, risk_free, "SPY", oos_start, oos_end) if oos_start else {}
 
     print("\n" + "=" * 50)
     print("FULL PERIOD")
     print("=" * 50)
     _print_metrics(full_metrics)
+    if bench_full:
+        print("\n  --- SPY buy-and-hold (same period) ---")
+        _print_metrics(bench_full)
 
     if is_metrics:
         print("\nIN-SAMPLE")
         print("-" * 50)
         _print_metrics(is_metrics)
+        if bench_is:
+            print("\n  --- SPY buy-and-hold (same period) ---")
+            _print_metrics(bench_is)
 
     if oos_metrics:
         print("\nOUT-OF-SAMPLE (holdout)")
         print("-" * 50)
         _print_metrics(oos_metrics)
-
-    if bench_metrics:
-        print("\nBENCHMARK (SPY buy-and-hold)")
-        print("-" * 50)
-        _print_metrics(bench_metrics)
+        if bench_oos:
+            print("\n  --- SPY buy-and-hold (same period) ---")
+            _print_metrics(bench_oos)
 
     print("\n4. Generating plots...")
     spy_prices = prices.filter(pl.col("ticker") == "SPY")

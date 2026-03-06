@@ -1,7 +1,7 @@
 import polars as pl
 import numpy as np
 from datetime import datetime
-from config.settings import INITIAL_CASH, HOLDOUT_MONTHS, TOP_N
+from config.settings import INITIAL_CASH, HOLDOUT_QUARTERS, TOP_N, REBALANCE_FREQ
 from scoring.combine import compute_all_factors, composite_score
 from portfolio.construct import select_top_n
 
@@ -9,18 +9,23 @@ from portfolio.construct import select_top_n
 def run_backtest(
     prices: pl.DataFrame,
     sector_map: dict[str, str],
-    holdout_months: int = HOLDOUT_MONTHS,
+    holdout_periods: int = HOLDOUT_QUARTERS,
+    weights: dict | None = None,
+    freq: str = REBALANCE_FREQ,
 ) -> dict:
-    """Walk-forward monthly backtest.
+    """Walk-forward backtest with configurable rebalance frequency.
 
-    Returns dict with equity_curve, holdings_history, rebalance_dates, and metrics.
+    Returns dict with equity_curve, rebalance_log, is_dates, oos_dates.
     """
     dates = prices["date"].unique().sort().to_list()
 
-    rebalance_dates = _get_monthly_rebalance_dates(dates)
+    if freq == "QS":
+        rebalance_dates = _get_quarterly_rebalance_dates(dates)
+    else:
+        rebalance_dates = _get_monthly_rebalance_dates(dates)
 
-    if holdout_months > 0:
-        cutoff_idx = len(rebalance_dates) - holdout_months
+    if holdout_periods > 0:
+        cutoff_idx = len(rebalance_dates) - holdout_periods
         is_dates = rebalance_dates[:cutoff_idx]
         oos_dates = rebalance_dates[cutoff_idx:]
     else:
@@ -28,11 +33,10 @@ def run_backtest(
         oos_dates = []
 
     cash = float(INITIAL_CASH)
-    holdings: dict[str, float] = {}  # ticker -> shares
+    holdings: dict[str, float] = {}
     previous_tickers: list[str] = []
 
     equity_curve = []
-    holdings_history = []
     rebalance_log = []
 
     all_rebalance_dates = is_dates + oos_dates
@@ -40,7 +44,7 @@ def run_backtest(
     for i, reb_date in enumerate(all_rebalance_dates):
         available_prices = prices.filter(pl.col("date") <= reb_date)
         factored = compute_all_factors(available_prices)
-        scored = composite_score(factored)
+        scored = composite_score(factored, weights=weights)
 
         snapshot = scored.filter(pl.col("date") == reb_date)
         if snapshot.is_empty():
@@ -59,19 +63,18 @@ def run_backtest(
         portfolio_value = _get_portfolio_value(holdings, prices, reb_date) + cash
 
         selected_tickers = portfolio["ticker"].to_list()
-        weights = portfolio["weight"].to_list()
+        port_weights = portfolio["weight"].to_list()
 
         holdings = {}
         cash = 0.0
-        for ticker, weight in zip(selected_tickers, weights):
-            allocation = portfolio_value * weight
+        for ticker, pw in zip(selected_tickers, port_weights):
+            allocation = portfolio_value * pw
             price_row = prices.filter(
                 (pl.col("ticker") == ticker) & (pl.col("date") == reb_date)
             )
             if not price_row.is_empty():
                 price = price_row["close"][0]
-                shares = allocation / price
-                holdings[ticker] = shares
+                holdings[ticker] = allocation / price
             else:
                 cash += allocation
 
@@ -109,6 +112,19 @@ def _get_monthly_rebalance_dates(dates):
         if month_key != current_month:
             rebalance.append(d)
             current_month = month_key
+    return rebalance
+
+
+def _get_quarterly_rebalance_dates(dates):
+    """First trading day of each quarter (Jan, Apr, Jul, Oct)."""
+    quarter_months = {1, 4, 7, 10}
+    rebalance = []
+    current_quarter = None
+    for d in sorted(dates):
+        q_key = (d.year, (d.month - 1) // 3)
+        if q_key != current_quarter and d.month in quarter_months:
+            rebalance.append(d)
+            current_quarter = q_key
     return rebalance
 
 

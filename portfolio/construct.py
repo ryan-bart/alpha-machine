@@ -1,5 +1,5 @@
 import polars as pl
-from config.settings import TOP_N, MIN_COMPOSITE_PERCENTILE, SELL_THRESHOLD_RANK
+from config.settings import TOP_N, MIN_COMPOSITE_PERCENTILE, SELL_THRESHOLD_RANK, WEIGHTING
 
 
 def select_top_n(
@@ -69,6 +69,18 @@ def select_top_n(
             selected = selected[: TOP_N - len(retained)] + retained
 
     result = pl.DataFrame(selected[:TOP_N])
-    weight = 1.0 / len(result) if len(result) > 0 else 0.0
-    result = result.with_columns(pl.lit(weight).alias("weight"))
+
+    if len(result) == 0:
+        return result.with_columns(pl.lit(0.0).alias("weight"))
+
+    if WEIGHTING == "score":
+        scores = result["composite_score"]
+        total = scores.sum()
+        result = result.with_columns(
+            (pl.col("composite_score") / total).alias("weight")
+        )
+    else:
+        weight = 1.0 / len(result)
+        result = result.with_columns(pl.lit(weight).alias("weight"))
+
     return result

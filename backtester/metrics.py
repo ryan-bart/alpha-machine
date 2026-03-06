@@ -49,10 +49,19 @@ def compute_metrics(equity_curve: pl.DataFrame, risk_free_rate: float = 0.05) ->
 
 
 def compute_benchmark_metrics(
-    prices: pl.DataFrame, risk_free_rate: float = 0.05, ticker: str = "SPY"
+    prices: pl.DataFrame, risk_free_rate: float = 0.05, ticker: str = "SPY",
+    start_date=None, end_date=None,
 ) -> dict:
-    """Compute buy-and-hold metrics for a benchmark ticker."""
+    """Compute buy-and-hold metrics for a benchmark ticker, optionally within a date range."""
     bench = prices.filter(pl.col("ticker") == ticker).sort("date")
+    if bench.is_empty():
+        return {}
+
+    if start_date is not None:
+        bench = bench.filter(pl.col("date") >= start_date)
+    if end_date is not None:
+        bench = bench.filter(pl.col("date") <= end_date)
+
     if bench.is_empty():
         return {}
 
