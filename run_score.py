@@ -1,6 +1,6 @@
-"""Score the S&P 500 universe and produce a recommendation report."""
+"""Score the stock universe and produce a recommendation report."""
 
-from data.universe import get_sp500_tickers
+from data.universe import get_universe
 from data.prices import download_prices
 from data.macro import get_risk_free_rate
 from scoring.combine import score_universe
@@ -13,8 +13,8 @@ from output.report import generate_report
 def main():
     print("=== Alpha-Machine: Multi-Factor Stock Scoring ===\n")
 
-    print("1. Fetching S&P 500 universe...")
-    universe = get_sp500_tickers()
+    print("1. Fetching universe...")
+    universe = get_universe()
     tickers = universe["ticker"].to_list()
     sector_map = dict(zip(universe["ticker"].to_list(), universe["sector"].to_list()))
     company_map = dict(zip(universe["ticker"].to_list(), universe["company"].to_list()))

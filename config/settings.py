@@ -12,6 +12,8 @@ SECTORS_CACHE = CACHE_DIR / "sectors.parquet"
 # -- Universe --
 UNIVERSE_REFRESH_DAYS = 7
 SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+RUSSELL1000_WIKI_URL = "https://en.wikipedia.org/wiki/Russell_1000_Index"
+UNIVERSE_SOURCE = "russell1000"  # "sp500" or "russell1000"
 
 # -- Prices --
 PRICE_HISTORY_YEARS = 10

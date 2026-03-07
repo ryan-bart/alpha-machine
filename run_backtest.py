@@ -1,13 +1,13 @@
 """Backtest the multi-factor scoring system historically."""
 
-from data.universe import get_sp500_tickers
+from data.universe import get_universe
 from data.prices import download_prices
 from data.macro import get_risk_free_rate
 from scoring.missing import filter_insufficient_history
 from backtester.engine import run_backtest
 from backtester.metrics import compute_metrics, compute_benchmark_metrics
 from output.plots import plot_equity_curve, plot_monthly_heatmap
-from config.settings import FACTOR_WEIGHTS, TOP_N, SECTOR_CAP, SELL_THRESHOLD_RANK, REBALANCE_FREQ, WEIGHTING
+from config.settings import FACTOR_WEIGHTS, TOP_N, SECTOR_CAP, SELL_THRESHOLD_RANK, REBALANCE_FREQ, WEIGHTING, UNIVERSE_SOURCE
 import polars as pl
 
 
@@ -15,7 +15,7 @@ def main():
     print("=== Alpha-Machine: Historical Backtest ===\n")
 
     print("Settings:")
-    print(f"  Positions: {TOP_N} | Weighting: {WEIGHTING} | Sector cap: {'off' if SECTOR_CAP >= 1.0 else f'{SECTOR_CAP:.0%}'} | Sell threshold: rank {SELL_THRESHOLD_RANK} | Rebalance: {'quarterly' if REBALANCE_FREQ == 'QS' else 'monthly'}")
+    print(f"  Universe: {UNIVERSE_SOURCE} | Positions: {TOP_N} | Weighting: {WEIGHTING} | Sector cap: {'off' if SECTOR_CAP >= 1.0 else f'{SECTOR_CAP:.0%}'} | Sell threshold: rank {SELL_THRESHOLD_RANK} | Rebalance: {'quarterly' if REBALANCE_FREQ == 'QS' else 'monthly'}")
     print(f"  Weights:")
     for name, w in FACTOR_WEIGHTS.items():
         if w > 0:
@@ -23,7 +23,7 @@ def main():
     print()
 
     print("1. Fetching universe and prices...")
-    universe = get_sp500_tickers()
+    universe = get_universe()
     tickers = universe["ticker"].to_list()
     sector_map = dict(zip(universe["ticker"].to_list(), universe["sector"].to_list()))
 

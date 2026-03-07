@@ -8,7 +8,7 @@ No full portfolio simulation — runs in seconds, not hours.
 
 import numpy as np
 import polars as pl
-from data.universe import get_sp500_tickers
+from data.universe import get_universe
 from data.prices import download_prices
 from scoring.combine import compute_all_factors, ALL_FACTORS
 from scoring.missing import filter_insufficient_history
@@ -132,7 +132,7 @@ def main():
     print("=== Alpha-Machine: Weight Optimization ===\n")
 
     print("1. Loading data...")
-    universe = get_sp500_tickers()
+    universe = get_universe()
     tickers = universe["ticker"].to_list()
     sector_map = dict(zip(universe["ticker"].to_list(), universe["sector"].to_list()))
     if "SPY" not in tickers:
