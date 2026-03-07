@@ -14,7 +14,7 @@ UNIVERSE_REFRESH_DAYS = 7
 SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 
 # -- Prices --
-PRICE_HISTORY_YEARS = 3
+PRICE_HISTORY_YEARS = 10
 MIN_TRADING_DAYS = 200
 
 # -- Factor weights (sum to 1.0) --
@@ -42,7 +42,7 @@ SELL_THRESHOLD_RANK = 15
 REBALANCE_FREQ = "QS"  # quarter start
 
 # -- Backtest --
-HOLDOUT_QUARTERS = 4  # 4 quarters = 1 year holdout
+HOLDOUT_QUARTERS = 8  # 8 quarters = 2 year holdout
 INITIAL_CASH = 100_000
 
 # -- FRED --
