@@ -27,46 +27,40 @@ def select_top_n(
 
     eligible = scored.filter(pl.col("composite_score") >= min_score)
 
-    selected = []
-    sector_counts: dict[str, int] = {}
+    prev_set = set(previous_holdings) if previous_holdings else set()
+    eligible_rows = eligible.to_dicts()
     max_per_sector = int(TOP_N * sector_cap)
 
-    prev_set = set(previous_holdings)
-    eligible_rows = eligible.to_dicts()
+    # Build rank lookup (0-indexed)
+    ticker_rank = {row["ticker"]: i for i, row in enumerate(eligible_rows)}
 
+    # Step 1: Retain previous holdings that haven't dropped below threshold
+    retained = []
+    sector_counts: dict[str, int] = {}
+    if prev_set:
+        for row in eligible_rows:
+            ticker = row["ticker"]
+            if ticker in prev_set and ticker_rank[ticker] < SELL_THRESHOLD_RANK:
+                sector = row["sector"]
+                if sector_counts.get(sector, 0) < max_per_sector:
+                    retained.append(row)
+                    sector_counts[sector] = sector_counts.get(sector, 0) + 1
+
+    retained_tickers = {r["ticker"] for r in retained}
+
+    # Step 2: Fill remaining slots from top-ranked stocks not already retained
+    selected = list(retained)
     for row in eligible_rows:
         if len(selected) >= TOP_N:
             break
-
         ticker = row["ticker"]
-        sector = row["sector"]
-        current_count = sector_counts.get(sector, 0)
-
-        if current_count >= max_per_sector:
+        if ticker in retained_tickers:
             continue
-
+        sector = row["sector"]
+        if sector_counts.get(sector, 0) >= max_per_sector:
+            continue
         selected.append(row)
-        sector_counts[sector] = current_count + 1
-
-    selected_tickers = {r["ticker"] for r in selected}
-
-    if prev_set:
-        retained = []
-        for row in eligible_rows:
-            ticker = row["ticker"]
-            if ticker in prev_set and ticker not in selected_tickers:
-                rank_in_list = next(
-                    (i for i, r in enumerate(eligible_rows) if r["ticker"] == ticker),
-                    TOP_N + 1,
-                )
-                if rank_in_list < SELL_THRESHOLD_RANK:
-                    sector = row["sector"]
-                    if sector_counts.get(sector, 0) < max_per_sector:
-                        retained.append(row)
-                        sector_counts[sector] = sector_counts.get(sector, 0) + 1
-
-        if retained:
-            selected = selected[: TOP_N - len(retained)] + retained
+        sector_counts[sector] = sector_counts.get(sector, 0) + 1
 
     result = pl.DataFrame(selected[:TOP_N])
 
