@@ -91,4 +91,7 @@ def _fetch_batch(tickers, start_date):
     combined.columns = [c.lower() for c in combined.columns]
     result = pl.from_pandas(combined)
     result = result.with_columns(pl.col("date").cast(pl.Date))
+    for col in ["open", "high", "low", "close", "volume"]:
+        if col in result.columns:
+            result = result.with_columns(pl.col(col).cast(pl.Float64))
     return result

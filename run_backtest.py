@@ -27,8 +27,9 @@ def main():
     tickers = universe["ticker"].to_list()
     sector_map = dict(zip(universe["ticker"].to_list(), universe["sector"].to_list()))
 
-    if "SPY" not in tickers:
-        tickers.append("SPY")
+    for bench_ticker in ["SPY", "RSP"]:
+        if bench_ticker not in tickers:
+            tickers.append(bench_ticker)
 
     prices = download_prices(tickers)
     prices = filter_insufficient_history(prices)
@@ -50,43 +51,52 @@ def main():
     is_metrics = compute_metrics(is_curve, risk_free) if not is_curve.is_empty() else {}
     oos_metrics = compute_metrics(oos_curve, risk_free) if not oos_curve.is_empty() else {}
 
-    bench_full = compute_benchmark_metrics(prices, risk_free, "SPY")
-
     is_start = is_curve["date"].min() if not is_curve.is_empty() else None
     is_end = is_curve["date"].max() if not is_curve.is_empty() else None
     oos_start = oos_curve["date"].min() if not oos_curve.is_empty() else None
     oos_end = oos_curve["date"].max() if not oos_curve.is_empty() else None
 
-    bench_is = compute_benchmark_metrics(prices, risk_free, "SPY", is_start, is_end) if is_start else {}
-    bench_oos = compute_benchmark_metrics(prices, risk_free, "SPY", oos_start, oos_end) if oos_start else {}
+    benchmarks = {}
+    for bench_ticker in ["SPY", "RSP"]:
+        benchmarks[bench_ticker] = {
+            "full": compute_benchmark_metrics(prices, risk_free, bench_ticker),
+            "is": compute_benchmark_metrics(prices, risk_free, bench_ticker, is_start, is_end) if is_start else {},
+            "oos": compute_benchmark_metrics(prices, risk_free, bench_ticker, oos_start, oos_end) if oos_start else {},
+        }
 
     print("\n" + "=" * 50)
     print("FULL PERIOD")
     print("=" * 50)
     _print_metrics(full_metrics)
-    if bench_full:
-        print("\n  --- SPY buy-and-hold (same period) ---")
-        _print_metrics(bench_full)
+    for name, bm in benchmarks.items():
+        if bm["full"]:
+            print(f"\n  --- {name} buy-and-hold (same period) ---")
+            _print_metrics(bm["full"])
 
     if is_metrics:
         print("\nIN-SAMPLE")
         print("-" * 50)
         _print_metrics(is_metrics)
-        if bench_is:
-            print("\n  --- SPY buy-and-hold (same period) ---")
-            _print_metrics(bench_is)
+        for name, bm in benchmarks.items():
+            if bm["is"]:
+                print(f"\n  --- {name} buy-and-hold (same period) ---")
+                _print_metrics(bm["is"])
 
     if oos_metrics:
         print("\nOUT-OF-SAMPLE (holdout)")
         print("-" * 50)
         _print_metrics(oos_metrics)
-        if bench_oos:
-            print("\n  --- SPY buy-and-hold (same period) ---")
-            _print_metrics(bench_oos)
+        for name, bm in benchmarks.items():
+            if bm["oos"]:
+                print(f"\n  --- {name} buy-and-hold (same period) ---")
+                _print_metrics(bm["oos"])
 
     print("\n4. Generating plots...")
-    spy_prices = prices.filter(pl.col("ticker") == "SPY")
-    plot_equity_curve(equity_curve, spy_prices)
+    bench_prices = {
+        name: prices.filter(pl.col("ticker") == name)
+        for name in ["SPY", "RSP"]
+    }
+    plot_equity_curve(equity_curve, bench_prices)
     plot_monthly_heatmap(equity_curve)
 
     print("\nBacktest complete.")

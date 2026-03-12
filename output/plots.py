@@ -3,8 +3,13 @@ import numpy as np
 from config.settings import CACHE_DIR
 
 
-def plot_equity_curve(equity_curve: pl.DataFrame, benchmark: pl.DataFrame | None = None):
-    """Plot equity curve and optionally a benchmark. Saves to cache/equity_curve.png."""
+def plot_equity_curve(equity_curve: pl.DataFrame, benchmarks=None):
+    """Plot equity curve and optionally benchmarks. Saves to cache/equity_curve.png.
+
+    Args:
+        equity_curve: Strategy equity curve DataFrame [date, value]
+        benchmarks: dict of {name: pl.DataFrame} or single pl.DataFrame for backward compat
+    """
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -18,12 +23,20 @@ def plot_equity_curve(equity_curve: pl.DataFrame, benchmark: pl.DataFrame | None
 
     ax.plot(ec["date"].to_list(), ec["value"].to_list(), label="Strategy", linewidth=1.5)
 
-    if benchmark is not None and not benchmark.is_empty():
-        bench = benchmark.sort("date")
-        initial = ec["value"][0]
-        bench_vals = bench["close"].to_numpy()
-        bench_normalized = bench_vals / bench_vals[0] * initial
-        ax.plot(bench["date"].to_list(), bench_normalized, label="SPY", linewidth=1.0, alpha=0.7)
+    # Support both dict of benchmarks and single DataFrame
+    if benchmarks is not None:
+        if isinstance(benchmarks, dict):
+            bench_items = benchmarks.items()
+        else:
+            bench_items = [("SPY", benchmarks)]
+
+        for name, bench_df in bench_items:
+            if bench_df is not None and not bench_df.is_empty():
+                bench = bench_df.sort("date")
+                initial = ec["value"][0]
+                bench_vals = bench["close"].to_numpy()
+                bench_normalized = bench_vals / bench_vals[0] * initial
+                ax.plot(bench["date"].to_list(), bench_normalized, label=name, linewidth=1.0, alpha=0.7)
 
     if "is_oos" in ec.columns:
         oos = ec.filter(pl.col("is_oos"))

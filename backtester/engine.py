@@ -6,6 +6,9 @@ from scoring.combine import compute_all_factors, composite_score
 from portfolio.construct import select_top_n
 
 
+BENCHMARK_TICKERS = {"SPY", "RSP"}
+
+
 def run_backtest(
     prices: pl.DataFrame,
     sector_map: dict[str, str],
@@ -18,6 +21,7 @@ def run_backtest(
 
     Returns dict with equity_curve, rebalance_log, is_dates, oos_dates.
     """
+    scoring_prices = prices.filter(~pl.col("ticker").is_in(BENCHMARK_TICKERS))
     dates = prices["date"].unique().sort().to_list()
 
     if freq == "QS":
@@ -43,7 +47,7 @@ def run_backtest(
     all_rebalance_dates = is_dates + oos_dates
 
     for i, reb_date in enumerate(all_rebalance_dates):
-        available_prices = prices.filter(pl.col("date") <= reb_date)
+        available_prices = scoring_prices.filter(pl.col("date") <= reb_date)
         factored = compute_all_factors(available_prices)
         scored = composite_score(factored, weights=weights)
 
@@ -152,6 +156,7 @@ def precompute_snapshots(
 
     Returns dict with rebalance_dates, snapshots, all_dates, is_dates, oos_dates.
     """
+    scoring_prices = prices.filter(~pl.col("ticker").is_in(BENCHMARK_TICKERS))
     dates = prices["date"].unique().sort().to_list()
 
     if freq == "QS":
@@ -172,7 +177,7 @@ def precompute_snapshots(
     snapshots = {}
     for idx, reb_date in enumerate(all_rebalance_dates):
         print(f"   Computing factors for period {idx + 1}/{len(all_rebalance_dates)}...", end="\r")
-        available_prices = prices.filter(pl.col("date") <= reb_date)
+        available_prices = scoring_prices.filter(pl.col("date") <= reb_date)
         factored = compute_all_factors(available_prices)
         scored = composite_score(factored, weights=weights)
 
