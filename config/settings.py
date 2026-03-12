@@ -43,6 +43,32 @@ MIN_COMPOSITE_PERCENTILE = 0.50
 SELL_THRESHOLD_RANK = 150
 REBALANCE_FREQ = "QS"  # quarter start
 
+# -- Transaction costs & taxes --
+TRANSACTION_COST_BPS = 10      # basis points per trade (10 = 0.10%)
+SHORT_TERM_TAX_RATE = 0.35     # gains on positions held < 1 year
+LONG_TERM_TAX_RATE = 0.15      # gains on positions held >= 1 year
+REBALANCE_BAND = 0.05          # only rebalance if position drifts >5% from target
+TAX_PROTECTION_DAYS = 90       # defer selling gains within this many days of 1-year LT threshold
+
+# -- Strategy profiles --
+# Shared scoring/portfolio settings above, only trading rules differ.
+# Select via: python run_backtest.py [strategy_name]
+STRATEGIES = {
+    "tax_advantaged": {
+        "description": "For IRA/401k — no tax-aware rules, pre-tax results only",
+        "rebalance_band": 0.01,
+        "tax_protection_days": 0,
+        "show_after_tax": False,
+    },
+    "taxable": {
+        "description": "For taxable accounts — wider bands, LT tax protection",
+        "rebalance_band": 0.05,
+        "tax_protection_days": 90,
+        "show_after_tax": True,
+    },
+}
+DEFAULT_STRATEGY = "taxable"
+
 # -- Backtest --
 HOLDOUT_QUARTERS = 8  # 8 quarters = 2 year holdout
 INITIAL_CASH = 100_000
