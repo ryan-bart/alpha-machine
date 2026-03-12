@@ -38,6 +38,7 @@ FACTOR_WEIGHTS = {
 # -- Portfolio --
 TOP_N = 20
 WEIGHTING = "equal"  # "equal" or "score"
+SCORE_TILT = 0.0     # 0 = equal weight, 1 = proportional to score, >1 = more concentrated
 SECTOR_CAP = 1.0  # disabled
 MIN_COMPOSITE_PERCENTILE = 0.50
 SELL_THRESHOLD_RANK = 150

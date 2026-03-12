@@ -1,5 +1,5 @@
 import polars as pl
-from config.settings import TOP_N, MIN_COMPOSITE_PERCENTILE, SELL_THRESHOLD_RANK, WEIGHTING, SECTOR_CAP
+from config.settings import TOP_N, MIN_COMPOSITE_PERCENTILE, SELL_THRESHOLD_RANK, WEIGHTING, SECTOR_CAP, SCORE_TILT
 
 
 def select_top_n(
@@ -8,6 +8,7 @@ def select_top_n(
     previous_holdings: list[str] | None = None,
     sector_cap: float = SECTOR_CAP,
     sell_threshold_rank: int = SELL_THRESHOLD_RANK,
+    score_tilt: float = SCORE_TILT,
 ) -> pl.DataFrame:
     """Select top N stocks with sector constraints and turnover dampening.
 
@@ -17,6 +18,7 @@ def select_top_n(
         previous_holdings: tickers held in previous period
         sector_cap: max weight in any one sector
         sell_threshold_rank: retain holdings ranked above this (lower = less dampening)
+        score_tilt: 0 = equal weight, 1 = proportional to score, >1 = concentrated
     """
     if previous_holdings is None:
         previous_holdings = []
@@ -69,12 +71,15 @@ def select_top_n(
     if len(result) == 0:
         return result.with_columns(pl.lit(0.0).alias("weight"))
 
-    if WEIGHTING == "score":
-        scores = result["composite_score"]
-        total = scores.sum()
+    if score_tilt > 0:
+        # weight ∝ score ^ tilt (0 = equal, 1 = proportional, >1 = concentrated)
         result = result.with_columns(
-            (pl.col("composite_score") / total).alias("weight")
+            pl.col("composite_score").pow(score_tilt).alias("_raw_weight")
         )
+        total = result["_raw_weight"].sum()
+        result = result.with_columns(
+            (pl.col("_raw_weight") / total).alias("weight")
+        ).drop("_raw_weight")
     else:
         weight = 1.0 / len(result)
         result = result.with_columns(pl.lit(weight).alias("weight"))

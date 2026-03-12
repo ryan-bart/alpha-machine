@@ -243,6 +243,7 @@ def run_backtest_from_snapshots(
     apply_costs: bool = False,
     rebalance_band: float | None = None,
     tax_protection_days: int | None = None,
+    score_tilt: float = 0.0,
 ) -> dict:
     """Run backtest using pre-computed snapshots (fast, for parameter sweeps).
 
@@ -284,6 +285,7 @@ def run_backtest_from_snapshots(
         portfolio = select_top_n(
             snapshot, sector_map, previous_tickers,
             sell_threshold_rank=sell_threshold_rank,
+            score_tilt=score_tilt,
         )
 
         selected_tickers = portfolio["ticker"].to_list()
