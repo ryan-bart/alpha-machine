@@ -1,12 +1,12 @@
 # Alpha-Machine
 
-A multi-factor stock scoring system that screens the S&P 500 and outputs actionable quarterly stock recommendations. Built with Python, Polars, and free data sources (yfinance, Wikipedia, FRED).
+A multi-factor stock scoring system that screens the Russell 1000 and outputs actionable quarterly stock recommendations. Built with Python, Polars, and free data sources (yfinance, Wikipedia, FRED).
 
 ---
 
 ## What Does This Do?
 
-Alpha-Machine looks at every stock in the S&P 500 and ranks them using 10 different measurable signals (called "factors") derived from price and volume data. It combines those rankings into a single composite score per stock, then picks the top 20 to form a portfolio. Think of it like a systematic stock screener that replaces gut feelings with math.
+Alpha-Machine looks at every stock in the Russell 1000 (~1,005 stocks) and ranks them using 10 different measurable signals (called "factors") derived from price and volume data. It combines those rankings into a single composite score per stock, then picks the top 20 to form a portfolio. Think of it like a systematic stock screener that replaces gut feelings with math.
 
 **It answers one question:** "If I had to pick 20 stocks to hold for the next quarter, which ones have the best combination of momentum, stability, and volume characteristics?"
 
@@ -14,7 +14,7 @@ Alpha-Machine looks at every stock in the S&P 500 and ranks them using 10 differ
 
 When you run `python run_score.py`, you get a ranked list of 20 stocks to buy. The intended holding period is **one quarter** — on the first trading day of each quarter, you would:
 
-1. Sell any stocks that dropped out of the top 20
+1. Sell any stocks that dropped out of the top 20 (unless they're still ranked within the top 150 — see turnover dampening below)
 2. Buy any new stocks that entered the top 20
 3. Rebalance so each position is an equal ~5% of your portfolio
 
@@ -58,7 +58,7 @@ The weights are tuned for quarterly rebalancing: persistent signals (momentum, l
 ### How Factors Become Scores
 
 1. **Compute raw factor values** for every stock on a given date
-2. **Percentile rank** each factor across all ~500 stocks. The stock with the highest momentum gets a rank of 1.0, the lowest gets 0.0, and everything else falls in between. This makes factors comparable — you can't directly compare a momentum percentage to a volatility number, but you can compare "top 10% in momentum" to "top 10% in volatility"
+2. **Percentile rank** each factor across all ~1,005 stocks. The stock with the highest momentum gets a rank of 1.0, the lowest gets 0.0, and everything else falls in between. This makes factors comparable — you can't directly compare a momentum percentage to a volatility number, but you can compare "top 10% in momentum" to "top 10% in volatility"
 3. **Weighted average** of all 10 percentile ranks using the weights above, producing a single composite score between 0 and 1
 4. **Select the top 20** stocks by composite score
 
@@ -73,8 +73,67 @@ A critical rule: when scoring stocks on date X, only data from date X and earlie
 Picking the top 20 stocks isn't quite as simple as sorting by score. There are constraints:
 
 - **Minimum score**: A stock must be above the 50th percentile composite score to be included. If fewer than 20 stocks pass this bar, the portfolio holds fewer positions (and implicitly holds cash).
-- **Turnover dampening**: A stock already in the portfolio doesn't get removed unless it drops below rank 15. This prevents churning — without this rule, a stock oscillating between rank 19 and 21 would be bought and sold every quarter, generating unnecessary trading costs.
-- **Equal weight**: Each position gets an equal ~5% allocation. This is simpler and more diversified than market-cap weighting where a few mega-caps dominate.
+- **Turnover dampening**: A stock already in the portfolio doesn't get removed unless it drops below rank 150. This prevents churning — without this rule, a stock oscillating between rank 19 and 21 would be bought and sold every quarter, generating unnecessary trading costs. Rank 150 was selected via parameter sweep as the best tradeoff between turnover reduction and performance.
+- **Equal weight**: Each position gets an equal ~5% allocation. This is simpler and more diversified than market-cap weighting where a few mega-caps dominate. Score-proportional sizing was tested via sweep but showed no benefit — with 20 stocks selected from the top of the distribution, composite scores are too bunched together for tilting to add signal.
+- **Delta-based rebalancing**: When rebalancing, only the difference between current and target allocations is traded, not full liquidation and re-purchase.
+
+---
+
+## Strategy Profiles
+
+Alpha-Machine supports two strategy profiles optimized for different account types:
+
+### Tax-Advantaged (`python run_backtest.py tax_advantaged`)
+
+For IRA, 401(k), and other tax-deferred accounts. No tax-aware rules — reports pre-tax results only. Tight rebalance bands (1%) for precise allocation tracking.
+
+### Taxable (`python run_backtest.py taxable`)
+
+For taxable brokerage accounts. Includes:
+
+- **Transaction costs**: 10 basis points (0.10%) per trade, modeled as price slippage
+- **Capital gains taxes**: Short-term gains (<1 year held) taxed at 35%, long-term gains (>=1 year) at 15%
+- **Tax loss carry-forward**: Realized losses offset future gains before taxes are applied
+- **Wider rebalance bands** (5%): Only rebalance a position if it drifts more than 5% from its target weight, reducing unnecessary taxable events
+- **Long-term tax protection** (90 days): Defers selling a profitable position if it's within 90 days of qualifying for long-term capital gains treatment
+
+---
+
+## Backtest Results (Russell 1000, 10-Year, 2016-2026)
+
+40 quarterly rebalance periods. 32 in-sample, 8 out-of-sample (2-year holdout).
+
+### Tax-Advantaged (Pre-Tax)
+
+| Period | CAGR | Sharpe | Max Drawdown |
+|--------|------|--------|-------------|
+| **Full (2016-2026)** | 17.8% | 0.71 | -37.4% |
+| **In-Sample (2016-2024)** | 16.8% | 0.67 | -37.4% |
+| **Out-of-Sample (2024-2026)** | 22.8% | 1.05 | -17.1% |
+
+### Benchmarks (Same Periods)
+
+| Benchmark | Period | CAGR | Sharpe | Max Drawdown |
+|-----------|--------|------|--------|-------------|
+| **SPY** (S&P 500) | Full | 14.9% | 0.67 | -33.7% |
+| **SPY** | OOS | 15.3% | 0.73 | -18.8% |
+| **RSP** (Equal-Weight S&P) | Full | 11.7% | 0.50 | -39.7% |
+| **RSP** | OOS | 9.1% | 0.37 | -16.5% |
+
+### Taxable (After Costs & Taxes)
+
+| Period | CAGR | Sharpe | Max Drawdown | Tax Drag |
+|--------|------|--------|-------------|----------|
+| **Full** | 12.0% | 0.47 | -36.1% | -3.50%/yr |
+
+Note: After-tax returns trail SPY buy-and-hold (14.9%) because SPY defers all capital gains taxes indefinitely. This strategy is best deployed in tax-advantaged accounts where the full pre-tax edge is realized.
+
+### Key Takeaways
+
+- Beats SPY by +2.9% CAGR pre-tax over the full 10-year period
+- OOS Sharpe (1.05) improved vs. in-sample (0.67) — no evidence of overfitting
+- Russell 1000's wider mid-cap pool gives the scoring system more dispersion to exploit vs. S&P 500 alone
+- Tax-aware rules (wider bands + LT protection) reduced drag from -4.37%/yr to -3.50%/yr
 
 ---
 
@@ -84,27 +143,21 @@ Backtesting answers: "If I had followed this exact strategy in the past, how wou
 
 ### How It Works
 
-The backtester simulates running the strategy quarter by quarter starting from the beginning of the historical data:
+The backtester simulates running the strategy quarter by quarter starting from 2016:
 
 1. On the first trading day of Quarter 1, score all stocks using only data available at that point. Pick the top 20. "Buy" them.
 2. On the first trading day of Quarter 2, score all stocks again (still only using data up to that day). Sell any that dropped out, buy new ones. Track the portfolio value.
-3. Repeat for every quarter in the dataset.
+3. Repeat for every quarter in the dataset (40 quarters total).
 
 At the end, you have a full history of what the portfolio would have been worth on every day — this is the **equity curve**.
 
-### Why It's Valid
-
-The key insight: **the backtest never uses future information**. On each simulated rebalance date, the system only sees data that was actually available at that time. So the recommendations you get today use the exact same logic that was used in the backtest — just applied to today's data instead of historical data.
-
-The backtest doesn't prove the strategy *will* work going forward. Markets change. But it does show whether the strategy's logic *would have* captured the effects it's designed to capture. If a momentum-based strategy can't even beat buy-and-hold in a backtest, it's probably not worth running live.
-
 ### Overfitting Safeguards
 
-The biggest risk in backtesting is **overfitting** — tuning your strategy to perfectly fit historical data in a way that won't generalize to the future. Like memorizing test answers instead of learning the material.
+The biggest risk in backtesting is **overfitting** — tuning your strategy to perfectly fit historical data in a way that won't generalize to the future.
 
 Alpha-Machine guards against this in three ways:
 
-1. **Out-of-sample holdout**: The most recent 4 quarters of data are reserved as a "holdout" set. The strategy is developed and evaluated on older data first, then checked against the holdout. If performance collapses on the holdout, it's a red flag for overfitting.
+1. **Out-of-sample holdout**: The most recent 8 quarters (2 years) of data are reserved as a "holdout" set. The strategy is developed and evaluated on older data first, then checked against the holdout. If performance collapses on the holdout, it's a red flag for overfitting.
 2. **No parameter optimization**: The factor weights and thresholds are set based on academic research and intuition, not by searching for the combination that maximizes backtest returns.
 3. **Simple, transparent rules**: 10 factors, fixed weights, quarterly rebalance. There are very few "knobs to turn," which limits the opportunity to overfit.
 
@@ -112,60 +165,23 @@ Alpha-Machine guards against this in three ways:
 
 ## Performance Metrics Explained
 
-When the backtest runs, it produces several metrics. Here's what each one means:
-
 ### CAGR (Compound Annual Growth Rate)
-
-The average annual return, accounting for compounding. If you start with $100,000 and end with $184,510 after 3 years, your CAGR is 22.67%. This is the single most intuitive performance number — "how much did it grow per year, on average?"
+The average annual return, accounting for compounding.
 
 ### Sharpe Ratio
-
-Measures **return per unit of risk**. Calculated as: (strategy return - risk-free rate) / volatility of returns.
-
-- A Sharpe of 1.0 means you earned 1% of excess return for every 1% of volatility
-- Above 1.0 is generally considered good
-- Above 2.0 is exceptional (and rare for a long-only stock strategy)
-
-The "risk-free rate" is what you'd earn with zero risk (3-month Treasury bills, fetched from FRED). The Sharpe ratio asks: "Was the extra return worth the extra risk compared to just parking money in T-bills?"
+Return per unit of risk: (strategy return - risk-free rate) / volatility. Above 1.0 is generally good.
 
 ### Max Drawdown
-
-The worst peak-to-trough decline during the backtest period. If the portfolio went from $175,000 to $140,000 at its worst point, that's a -20% max drawdown. This is arguably the most important risk metric — it tells you the worst pain you would have experienced. A strategy with great returns but a -50% drawdown means you'd have watched half your money evaporate at some point.
+The worst peak-to-trough decline. Tells you the worst pain you would have experienced.
 
 ### Calmar Ratio
-
-CAGR divided by the absolute value of max drawdown. A Calmar of 1.12 means you earned 1.12% annually for every 1% of worst-case decline. Higher is better — it rewards high returns with shallow drawdowns.
+CAGR / |max drawdown|. Rewards high returns with shallow drawdowns.
 
 ### Annual Volatility
-
-The annualized standard deviation of daily returns. Measures how much the portfolio value bounces around day to day. Lower volatility means smoother returns. A 16% annual vol means roughly a 1% daily standard deviation (16% / sqrt(252 trading days)).
+Annualized standard deviation of daily returns. Lower = smoother ride.
 
 ### Monthly Hit Rate
-
-The percentage of months with positive returns. A 67.6% hit rate means roughly 2 out of 3 months were profitable. Even good strategies lose money some months — a 60%+ hit rate is solid.
-
-### Total Return
-
-Simple cumulative return over the entire period. Starting with $100,000 and ending at $184,510 is an 84.51% total return. Unlike CAGR, this doesn't account for the time period — an 84% return over 3 years is very different from 84% over 10 years.
-
-### HHI (Herfindahl-Hirschman Index)
-
-A concentration measure used in the sector exposure section. It's the sum of squared portfolio weights. For 20 equal-weight positions (5% each), HHI = 20 * 0.05^2 = 0.05. Lower HHI means more diversified. An HHI of 1.0 would mean the entire portfolio is in one stock.
-
----
-
-## What Is an Equity Curve?
-
-An equity curve is a line chart showing the portfolio's total value over time. It's the single most important visualization in backtesting.
-
-The X-axis is time (dates), the Y-axis is portfolio value in dollars. If you started with $100,000, the line shows what your account balance would have been on every trading day.
-
-In the Alpha-Machine equity curve plot:
-- The **blue line** is the strategy's portfolio value
-- The **orange line** is SPY (S&P 500 ETF) buy-and-hold — the benchmark you're trying to beat
-- The **red dashed line** marks where the out-of-sample holdout period begins
-
-When the blue line is above the orange line, the strategy is outperforming the market. The slope of the line shows the growth rate. Steep drops are drawdowns. A smooth, steadily rising line is ideal; a jagged, volatile line means the ride was bumpy.
+Percentage of months with positive returns. 60%+ is solid.
 
 ---
 
@@ -174,9 +190,9 @@ When the blue line is above the orange line, the strategy is outperforming the m
 ```
 alpha-machine/
 ├── config/
-│   └── settings.py              # All tunable parameters (weights, thresholds, paths)
+│   └── settings.py              # All tunable parameters (weights, thresholds, strategies)
 ├── data/
-│   ├── universe.py              # Fetches S&P 500 ticker list from Wikipedia
+│   ├── universe.py              # Fetches Russell 1000 ticker list from Wikipedia
 │   ├── prices.py                # Downloads price data via yfinance, caches as parquet
 │   └── macro.py                 # Fetches risk-free rate from FRED
 ├── factors/
@@ -194,16 +210,16 @@ alpha-machine/
 │   ├── construct.py             # Selects top N stocks with constraints
 │   └── risk.py                  # Sector exposure and concentration checks
 ├── backtester/
-│   ├── engine.py                # Walk-forward quarterly backtest simulation
+│   ├── engine.py                # Walk-forward backtest with position tracking and tax modeling
 │   └── metrics.py               # Performance metric calculations
 ├── output/
 │   ├── report.py                # Generates markdown recommendation report
 │   └── plots.py                 # Equity curve and monthly returns heatmap
 ├── cache/                       # Local data cache (gitignored)
-├── run_score.py                 # Score today's S&P 500 and produce recommendations
-├── run_backtest.py              # Run historical backtest and generate performance report
+├── run_score.py                 # Score today's Russell 1000 and produce recommendations
+├── run_backtest.py              # Run historical backtest (supports strategy profiles)
+├── run_sweep.py                 # Sweep parameters (sell threshold, score tilt)
 ├── run_optimize.py              # Weight optimizer (experimental)
-├── BACKLOG.md                   # Future work: options, ML scoring, paid data
 └── requirements.txt
 ```
 
@@ -218,11 +234,18 @@ pip install -r requirements.txt
 # Generate today's stock recommendations
 python run_score.py
 
-# Run the historical backtest
+# Run the historical backtest (default: taxable strategy)
 python run_backtest.py
+
+# Run for IRA/401k (pre-tax only)
+python run_backtest.py tax_advantaged
+
+# Sweep parameters to test tradeoffs
+python run_sweep.py threshold   # sell threshold rank values
+python run_sweep.py tilt        # score tilt (position sizing) values
 ```
 
-The first run downloads ~3 years of daily price data for all S&P 500 stocks (~500 tickers). This takes a few minutes. Subsequent runs use cached data and only download new days.
+The first run downloads ~10 years of daily price data for ~1,005 Russell 1000 stocks. This takes several minutes. Subsequent runs use cached data and only download new days.
 
 ### Output
 
@@ -237,18 +260,17 @@ All data is free and requires no API keys:
 
 | Source | What | How |
 |--------|------|-----|
-| **yfinance** | Daily OHLCV price data for all S&P 500 stocks | `yf.download()` — pulls from Yahoo Finance |
-| **Wikipedia** | Current list of S&P 500 constituents and their sectors | Scraped from the S&P 500 companies table |
+| **yfinance** | Daily OHLCV price data for ~1,005 stocks | `yf.download()` — pulls from Yahoo Finance |
+| **Wikipedia** | Current Russell 1000 constituents and their sectors | Scraped from the Russell 1000 Index table |
 | **FRED** | 3-month Treasury bill rate (risk-free rate for Sharpe ratio) | CSV download from Federal Reserve Economic Data |
 
 ---
 
 ## Limitations
 
-- **Survivorship bias**: The system uses today's S&P 500 list for the entire backtest. Stocks that were removed from the index (because they crashed, got acquired, etc.) are not included, which makes historical results look slightly better than they really were.
-- **No transaction costs**: The backtest doesn't account for trading commissions or bid-ask spreads. With 20 stocks rebalanced quarterly, real-world costs would be modest but nonzero.
+- **Survivorship bias**: The system uses today's Russell 1000 list for the entire backtest. Stocks that were removed from the index (because they crashed, got acquired, etc.) are not included, which makes historical results look slightly better than they really were.
 - **Price-only factors**: The system only uses price and volume data. Fundamental data (earnings, revenue, debt) could improve accuracy but requires paid data sources.
-- **3-year history**: With only ~3 years of data from yfinance, the backtest covers limited market conditions. A full market cycle (bull market, bear market, recovery) typically takes 7-10 years.
+- **Static universe**: The Russell 1000 membership changes annually; using today's list for a 10-year backtest introduces some look-ahead bias in universe selection.
 
 ---
 
