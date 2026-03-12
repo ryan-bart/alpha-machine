@@ -20,19 +20,20 @@ PRICE_HISTORY_YEARS = 10
 MIN_TRADING_DAYS = 200
 
 # -- Factor weights (sum to 1.0) --
-# Tuned for quarterly rebalancing: favor persistent signals (momentum, low-vol,
-# price consistency) over fast-decaying ones (reversal, volume spikes).
+# Informed by factor decay analysis (run_decay.py): removed factors with
+# consistently negative IC (realized_vol_60d, volume_trend), redistributed
+# weight to survivors. See CHANGELOG.md Phase 6 for full analysis.
 FACTOR_WEIGHTS = {
-    "momentum_12_1": 0.25,       # strongest evidence at 3-12mo horizon
-    "momentum_6_1": 0.15,        # intermediate momentum
-    "rel_strength_3mo": 0.10,    # most recent momentum signal at quarterly freq
-    "short_term_reversal": 0.00, # decays in days, useless at quarterly
-    "dist_from_ma50": 0.05,      # mild overextension filter
-    "volume_trend": 0.05,        # decays over 3 months, reduce
-    "obv_slope": 0.05,           # cumulative volume flow, somewhat persistent
-    "realized_vol_60d": 0.15,    # low-vol anomaly, very persistent
-    "vol_trend": 0.05,           # declining vol signal
-    "price_consistency": 0.15,   # steady climbers compound better over quarters
+    "momentum_12_1": 0.30,       # primary momentum signal, persistent at 6-12mo
+    "momentum_6_1": 0.20,        # best single factor by IC (0.059* at 2mo IS)
+    "rel_strength_3mo": 0.10,    # most recent momentum, slow to start but persistent
+    "short_term_reversal": 0.00, # strong peak IC but decays by 3mo, too fast for quarterly
+    "dist_from_ma50": 0.05,      # mild overextension filter, peaks at 3mo
+    "volume_trend": 0.00,        # removed — negative IC, ~50% hit rate (noise)
+    "obv_slope": 0.05,           # cumulative volume flow, marginal signal
+    "realized_vol_60d": 0.00,    # removed — consistently negative IC (34-38% hit rate)
+    "vol_trend": 0.10,           # most consistent factor at 3mo (75% hit rate, 0.037* IC)
+    "price_consistency": 0.20,   # steady climbers, 69% hit rate at 6mo
 }
 
 # -- Portfolio --

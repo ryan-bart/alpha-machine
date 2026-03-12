@@ -40,20 +40,20 @@ Each stock gets scored on 10 factors. Every factor produces a single number per 
 
 | # | Factor | What It Measures | Weight |
 |---|--------|-----------------|--------|
-| 1 | **Momentum 12-1mo** | Price change over the past year, excluding the most recent month (to avoid short-term reversal noise) | 25% |
-| 2 | **Momentum 6-1mo** | Same idea but over 6 months — captures medium-term trends | 15% |
+| 1 | **Momentum 12-1mo** | Price change over the past year, excluding the most recent month (to avoid short-term reversal noise) | 30% |
+| 2 | **Momentum 6-1mo** | Same idea but over 6 months — captures medium-term trends | 20% |
 | 3 | **Relative Strength 3mo** | Price change over the past 3 months — shorter-term momentum | 10% |
 | 4 | **Short-Term Reversal** | Price change over the past week, *inverted* — disabled (0% weight) because it decays too fast for quarterly rebalancing | 0% |
 | 5 | **Distance from 50-day MA** | How far the stock is above its 50-day moving average, *inverted* — prefers stocks near their average rather than overextended | 5% |
-| 6 | **Volume Trend** | Is trading volume increasing or decreasing? Compares recent 20-day average volume to 60-day average | 5% |
+| 6 | **Volume Trend** | Is trading volume increasing or decreasing? Compares recent 20-day average volume to 60-day average | 0% |
 | 7 | **OBV Slope** | On-Balance Volume trend — tracks whether volume flows into or out of a stock over 40 days | 5% |
-| 8 | **Realized Volatility** | How much the stock's price fluctuates day-to-day (60-day window), *inverted* — calmer stocks score higher | 15% |
-| 9 | **Volatility Trend** | Is volatility increasing or decreasing? *Inverted* — stocks with declining volatility score higher | 5% |
-| 10 | **Price Consistency** | What fraction of the last 60 trading days had positive returns — measures how "steadily" a stock has been climbing | 15% |
+| 8 | **Realized Volatility** | How much the stock's price fluctuates day-to-day (60-day window), *inverted* — calmer stocks score higher | 0% |
+| 9 | **Volatility Trend** | Is volatility increasing or decreasing? *Inverted* — stocks with declining volatility score higher | 10% |
+| 10 | **Price Consistency** | What fraction of the last 60 trading days had positive returns — measures how "steadily" a stock has been climbing | 20% |
 
-"Inverted" means lower raw values get higher scores. For example, a stock with low volatility scores *better* on the realized volatility factor.
+"Inverted" means lower raw values get higher scores. For example, a stock with declining volatility scores *better* on the volatility trend factor.
 
-The weights are tuned for quarterly rebalancing: persistent signals (momentum, low-vol, price consistency) are weighted heavily, while fast-decaying signals (short-term reversal, volume spikes) are reduced or disabled.
+Weights were informed by factor decay analysis (`run_decay.py`): each factor's rank IC (Spearman correlation with forward returns) was measured at 7 horizons from 1 to 12 months. Factors with consistently negative IC were removed (realized volatility, volume trend), and their weight was redistributed to factors with strong, persistent signal at the quarterly horizon. See `CHANGELOG.md` Phase 6 for the full analysis.
 
 ### How Factors Become Scores
 
@@ -105,35 +105,39 @@ For taxable brokerage accounts. Includes:
 
 ### Tax-Advantaged (Pre-Tax)
 
-| Period | CAGR | Sharpe | Max Drawdown |
-|--------|------|--------|-------------|
-| **Full (2016-2026)** | 17.8% | 0.71 | -37.4% |
-| **In-Sample (2016-2024)** | 16.8% | 0.67 | -37.4% |
-| **Out-of-Sample (2024-2026)** | 22.8% | 1.05 | -17.1% |
+| Period | CAGR | Sharpe | Max Drawdown | Total Return |
+|--------|------|--------|-------------|-------------|
+| **Full (2016-2026)** | 34.7% | 1.04 | -40.0% | 1825% |
+| **In-Sample (2016-2024)** | 34.7% | 1.04 | -40.0% | 981% |
+| **Out-of-Sample (2024-2026)** | 34.6% | 1.05 | -28.0% | 78% |
 
 ### Benchmarks (Same Periods)
 
 | Benchmark | Period | CAGR | Sharpe | Max Drawdown |
 |-----------|--------|------|--------|-------------|
 | **SPY** (S&P 500) | Full | 14.9% | 0.67 | -33.7% |
-| **SPY** | OOS | 15.3% | 0.73 | -18.8% |
-| **RSP** (Equal-Weight S&P) | Full | 11.7% | 0.50 | -39.7% |
-| **RSP** | OOS | 9.1% | 0.37 | -16.5% |
+| **SPY** | OOS | 15.5% | 0.74 | -18.8% |
+| **RSP** (Equal-Weight S&P) | Full | 11.7% | 0.50 | -39.0% |
+| **RSP** | OOS | 9.9% | 0.47 | -17.8% |
 
 ### Taxable (After Costs & Taxes)
 
 | Period | CAGR | Sharpe | Max Drawdown | Tax Drag |
 |--------|------|--------|-------------|----------|
-| **Full** | 12.0% | 0.47 | -36.1% | -3.50%/yr |
+| **Full (pre-tax)** | 33.4% | 1.02 | -39.1% | — |
+| **Full (after-tax)** | 26.7% | 0.84 | -39.4% | -5.02%/yr |
+| **OOS (pre-tax)** | 29.2% | 0.93 | -27.1% | — |
+| **OOS (after-tax)** | 21.3% | 0.70 | -28.3% | — |
 
-Note: After-tax returns trail SPY buy-and-hold (14.9%) because SPY defers all capital gains taxes indefinitely. This strategy is best deployed in tax-advantaged accounts where the full pre-tax edge is realized.
+Note: The higher tax drag vs. previous weights (-5.0%/yr vs -3.5%/yr) reflects increased portfolio turnover from the pure-momentum factor mix. Even after taxes, the strategy now beats SPY in both pre-tax and after-tax terms. See `CHANGELOG.md` for the full factor decay analysis that informed the weight changes.
 
 ### Key Takeaways
 
-- Beats SPY by +2.9% CAGR pre-tax over the full 10-year period
-- OOS Sharpe (1.05) improved vs. in-sample (0.67) — no evidence of overfitting
-- Russell 1000's wider mid-cap pool gives the scoring system more dispersion to exploit vs. S&P 500 alone
-- Tax-aware rules (wider bands + LT protection) reduced drag from -4.37%/yr to -3.50%/yr
+- Beats SPY by +19.8% CAGR pre-tax over the full 10-year period (34.7% vs 14.9%)
+- OOS Sharpe (1.05) matches in-sample (1.04) — no degradation out of sample
+- After removing factors with consistently negative predictive power (realized volatility, volume trend), the strategy shifted from a momentum + low-vol blend to a pure momentum strategy
+- Higher max drawdown (-40% vs SPY's -34%) is the tradeoff for higher returns — Calmar ratio (0.87) is still double SPY's (0.44)
+- Tax drag is structural at -5.0%/yr but after-tax returns (26.7%) still beat SPY (14.9%) unlike the previous weight set
 
 ---
 
@@ -158,8 +162,8 @@ The biggest risk in backtesting is **overfitting** — tuning your strategy to p
 Alpha-Machine guards against this in three ways:
 
 1. **Out-of-sample holdout**: The most recent 8 quarters (2 years) of data are reserved as a "holdout" set. The strategy is developed and evaluated on older data first, then checked against the holdout. If performance collapses on the holdout, it's a red flag for overfitting.
-2. **No parameter optimization**: The factor weights and thresholds are set based on academic research and intuition, not by searching for the combination that maximizes backtest returns.
-3. **Simple, transparent rules**: 10 factors, fixed weights, quarterly rebalance. There are very few "knobs to turn," which limits the opportunity to overfit.
+2. **Evidence-based weight selection**: Factor weights are informed by decay analysis (rank IC vs forward returns), not by searching for the combination that maximizes backtest returns. The analysis was run on in-sample data only, keeping the out-of-sample period pure.
+3. **Simple, transparent rules**: 10 factors (7 active), fixed weights, quarterly rebalance. There are very few "knobs to turn," which limits the opportunity to overfit.
 
 ---
 
@@ -219,7 +223,9 @@ alpha-machine/
 ├── run_score.py                 # Score today's Russell 1000 and produce recommendations
 ├── run_backtest.py              # Run historical backtest (supports strategy profiles)
 ├── run_sweep.py                 # Sweep parameters (sell threshold, score tilt)
+├── run_decay.py                 # Factor decay analysis (IC vs forward return horizon)
 ├── run_optimize.py              # Weight optimizer (experimental)
+├── CHANGELOG.md                 # Development history, experiments, and lessons learned
 └── requirements.txt
 ```
 
@@ -243,6 +249,9 @@ python run_backtest.py tax_advantaged
 # Sweep parameters to test tradeoffs
 python run_sweep.py threshold   # sell threshold rank values
 python run_sweep.py tilt        # score tilt (position sizing) values
+
+# Factor decay analysis (IC vs forward return horizon)
+python run_decay.py
 ```
 
 The first run downloads ~10 years of daily price data for ~1,005 Russell 1000 stocks. This takes several minutes. Subsequent runs use cached data and only download new days.
