@@ -40,7 +40,7 @@ TOP_N = 20
 WEIGHTING = "equal"  # "equal" or "score"
 SECTOR_CAP = 1.0  # disabled
 MIN_COMPOSITE_PERCENTILE = 0.50
-SELL_THRESHOLD_RANK = 30
+SELL_THRESHOLD_RANK = 150
 REBALANCE_FREQ = "QS"  # quarter start
 
 # -- Backtest --

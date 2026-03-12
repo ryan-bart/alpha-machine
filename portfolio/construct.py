@@ -1,12 +1,13 @@
 import polars as pl
-from config.settings import TOP_N, MIN_COMPOSITE_PERCENTILE, SELL_THRESHOLD_RANK, WEIGHTING
+from config.settings import TOP_N, MIN_COMPOSITE_PERCENTILE, SELL_THRESHOLD_RANK, WEIGHTING, SECTOR_CAP
 
 
 def select_top_n(
     scored: pl.DataFrame,
     sector_map: dict[str, str],
     previous_holdings: list[str] | None = None,
-    sector_cap: float = 0.25,
+    sector_cap: float = SECTOR_CAP,
+    sell_threshold_rank: int = SELL_THRESHOLD_RANK,
 ) -> pl.DataFrame:
     """Select top N stocks with sector constraints and turnover dampening.
 
@@ -15,6 +16,7 @@ def select_top_n(
         sector_map: {ticker: sector}
         previous_holdings: tickers held in previous period
         sector_cap: max weight in any one sector
+        sell_threshold_rank: retain holdings ranked above this (lower = less dampening)
     """
     if previous_holdings is None:
         previous_holdings = []
@@ -40,7 +42,7 @@ def select_top_n(
     if prev_set:
         for row in eligible_rows:
             ticker = row["ticker"]
-            if ticker in prev_set and ticker_rank[ticker] < SELL_THRESHOLD_RANK:
+            if ticker in prev_set and ticker_rank[ticker] < sell_threshold_rank:
                 sector = row["sector"]
                 if sector_counts.get(sector, 0) < max_per_sector:
                     retained.append(row)
