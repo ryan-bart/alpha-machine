@@ -9,6 +9,9 @@
 - ~~RSP (equal-weight S&P) benchmark~~
 - ~~Sell threshold optimization~~ — rank 150 optimal
 - ~~Russell 1000 universe expansion~~
+- ~~Factor decay analysis~~ — removed realized_vol_60d and volume_trend (negative IC), redistributed weights. See CHANGELOG.md Phase 6.
+- ~~Regime filter (SPY MA)~~ — tested via sweep, doesn't help at quarterly frequency. Filter triggers too late (after crash) or misses recovery. Negative result.
+- ~~Dynamic position count~~ — analyzed score distributions; rank 20 is always ~91% of rank 1 (std 2.5%), no meaningful variation to exploit.
 
 ## Near-Term (Improve Current Strategy)
 
@@ -16,17 +19,14 @@
 - **Point-in-time Russell 1000 membership**: Use the actual Russell 1000 constituents for each year (reconstitutes every June) instead of today's list for the entire backtest. Fixes survivorship bias and look-ahead bias in universe selection. Cannot be done accurately with yfinance alone (no historical shares outstanding, no delisted tickers). Data options: paid FTSE Russell data, Bloomberg/FactSet, or scrape iShares IWB ETF historical holdings as a free approximation.
 
 ### Factor & Signal Improvements
-- **Factor/market timing (regime filters)**: Reduce exposure during bear markets. Ideas: moving average regime filter (e.g., reduce position size when SPY < 200-day MA), VIX-based scaling, or trend-following overlay. Could significantly reduce max drawdown (-37%) without hurting CAGR much.
 - **Fundamental factors**: Add earnings momentum, revenue growth, or profitability factors. Requires paid data (or scraping SEC filings). Would diversify away from pure price/volume signals.
-- **Factor decay analysis**: Measure how quickly each factor's predictive power decays after portfolio formation. Could inform whether monthly rebalancing is worth the extra tax drag for specific factors.
 
 ### Portfolio & Execution
 - **Correlation-aware position sizing**: Use rolling pairwise correlations to reduce weight on clustered positions. Currently equal-weight ignores that holding 5 tech stocks is less diversified than 5 stocks across sectors.
-- **Dynamic position count**: Currently fixed at 20. Could vary based on signal strength — hold fewer stocks when conviction is high, more when scores are bunched.
 - **Rebalance timing**: Test rebalancing on different days within the quarter (e.g., avoiding quarter-end rebalancing when institutional flows distort prices).
 
 ### Risk Management
-- **Drawdown-triggered deleveraging**: Automatically reduce exposure (raise cash) when the portfolio draws down more than X%. Simple rule: if trailing drawdown > 15%, go to 50% cash.
+- **Drawdown-triggered deleveraging**: Automatically reduce exposure (raise cash) when the portfolio draws down more than X%. Note: regime filter failed at quarterly freq, but intra-quarter monitoring could work differently.
 - **Beta hedging**: Hedge market risk with SPY puts or short positions during high-vol regimes. Requires options/futures data.
 
 ## Medium-Term (New Capabilities)
@@ -56,6 +56,5 @@
 
 ### Infrastructure
 - Database backend (DuckDB) instead of parquet files
-- Scheduled daily runs (cron / Airflow)
 - Email/Slack alerts on rebalance days
 - Web dashboard (Streamlit)

@@ -244,11 +244,16 @@ def run_backtest_from_snapshots(
     rebalance_band: float | None = None,
     tax_protection_days: int | None = None,
     score_tilt: float = 0.0,
+    regime_ma_lookback: int = 0,
+    regime_cash_fraction: float = 0.50,
 ) -> dict:
     """Run backtest using pre-computed snapshots (fast, for parameter sweeps).
 
     When apply_costs=True, uses delta-based trading with transaction costs
     (modeled as slippage) and capital gains taxes.
+
+    Regime filter (regime_ma_lookback > 0): when SPY is below its N-day SMA
+    at a rebalance date, move regime_cash_fraction of the portfolio to cash.
     """
     is_dates = precomputed["is_dates"]
     oos_dates = precomputed["oos_dates"]
@@ -276,6 +281,17 @@ def run_backtest_from_snapshots(
     cumulative_lt_gains = 0.0
 
     all_rebalance_dates = is_dates + oos_dates
+
+    # Pre-compute SPY moving average series for regime filter
+    spy_ma_lookup = {}
+    if regime_ma_lookback > 0:
+        spy_df = prices.filter(pl.col("ticker") == "SPY").sort("date")
+        spy_dates = spy_df["date"].to_list()
+        spy_closes = spy_df["close"].to_numpy()
+        for idx in range(regime_ma_lookback - 1, len(spy_dates)):
+            spy_ma_lookup[spy_dates[idx]] = float(
+                np.mean(spy_closes[idx - regime_ma_lookback + 1 : idx + 1])
+            )
 
     for i, reb_date in enumerate(all_rebalance_dates):
         snapshot = snapshots.get(reb_date)
@@ -350,7 +366,16 @@ def run_backtest_from_snapshots(
             for t, pos in positions.items() if t not in target_set
         )
         available_capital = portfolio_value - protected_value
-        targets = {t: available_capital * w for t, w in zip(selected_tickers, port_weights)}
+
+        # --- Regime filter: scale down invested capital in bear regime ---
+        regime_invested = 1.0
+        if regime_ma_lookback > 0 and reb_date in spy_ma_lookup:
+            spy_close = _get_single_price(prices, "SPY", reb_date)
+            if spy_close is not None and spy_close < spy_ma_lookup[reb_date]:
+                regime_invested = 1.0 - regime_cash_fraction
+
+        invested_capital = available_capital * regime_invested
+        targets = {t: invested_capital * w for t, w in zip(selected_tickers, port_weights)}
 
         # --- Phase 2: Trim overweight retained positions ---
         band = rebalance_band
@@ -452,6 +477,7 @@ def run_backtest_from_snapshots(
             "portfolio_value": portfolio_value,
             "is_oos": is_oos,
             "turnover": turnover,
+            "regime_invested": regime_invested,
         })
 
         next_reb = all_rebalance_dates[i + 1] if i + 1 < len(all_rebalance_dates) else all_dates[-1]

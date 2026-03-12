@@ -3,6 +3,7 @@
 Usage:
     python run_sweep.py threshold    # sweep sell_threshold_rank (default)
     python run_sweep.py tilt         # sweep score_tilt values
+    python run_sweep.py regime       # sweep regime filter (MA lookback x cash fraction)
 """
 
 import sys
@@ -168,13 +169,67 @@ def sweep_tilt():
     print("Done.")
 
 
+REGIME_MA_VALUES = [0, 100, 150, 200, 250]
+REGIME_CASH_VALUES = [0.25, 0.50, 0.75, 1.00]
+
+
+def sweep_regime():
+    """Sweep regime filter: MA lookback x cash fraction (2D grid)."""
+    print("=== Alpha-Machine: Regime Filter Sweep ===\n")
+    print(f"MA lookbacks: {REGIME_MA_VALUES}")
+    print(f"Cash fractions: {REGIME_CASH_VALUES}")
+    print(f"When SPY < MA, move cash_fraction of portfolio to cash.\n")
+
+    prices, sector_map, risk_free = _load_data()
+
+    print("2. Pre-computing factor scores (one-time, slow)...")
+    precomputed = precompute_snapshots(prices)
+    print("   Done.\n")
+
+    print("3. Running sweep...\n")
+    rows = []
+
+    # Baseline: no regime filter
+    print("   regime: off...")
+    r = _run_and_collect(precomputed, prices, sector_map, risk_free)
+    rows.append(("off", r))
+
+    for ma in REGIME_MA_VALUES:
+        if ma == 0:
+            continue
+        for cash_frac in REGIME_CASH_VALUES:
+            label = f"MA{ma}/{cash_frac:.0%}"
+            print(f"   regime: {label}...")
+            r = _run_and_collect(
+                precomputed, prices, sector_map, risk_free,
+                regime_ma_lookback=ma,
+                regime_cash_fraction=cash_frac,
+            )
+
+            # Count bear periods
+            log = r.get("rebalance_log", [])
+            bear_count = sum(1 for entry in log if entry.get("regime_invested", 1.0) < 1.0) if log else 0
+
+            rows.append((label, r))
+
+    spy = _get_spy_benchmarks(precomputed, prices, risk_free)
+
+    print("\n" + "=" * 120)
+    print("REGIME FILTER SWEEP RESULTS")
+    print("=" * 120)
+    _print_table(rows, "Regime", "off", spy)
+    print("\nDone.")
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "threshold"
     if mode == "tilt":
         sweep_tilt()
     elif mode == "threshold":
         sweep_threshold()
+    elif mode == "regime":
+        sweep_regime()
     else:
         print(f"Unknown sweep mode: {mode}")
-        print("Usage: python run_sweep.py [threshold|tilt]")
+        print("Usage: python run_sweep.py [threshold|tilt|regime]")
         sys.exit(1)
