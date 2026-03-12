@@ -224,8 +224,11 @@ alpha-machine/
 ├── run_backtest.py              # Run historical backtest (supports strategy profiles)
 ├── run_sweep.py                 # Sweep parameters (sell threshold, score tilt)
 ├── run_decay.py                 # Factor decay analysis (IC vs forward return horizon)
+├── run_trade.py                 # Execute rebalance on Alpaca paper trading
+├── run_track.py                 # Track paper trading performance vs SPY
 ├── run_optimize.py              # Weight optimizer (experimental)
 ├── CHANGELOG.md                 # Development history, experiments, and lessons learned
+├── .env.example                 # Template for Alpaca API credentials
 └── requirements.txt
 ```
 
@@ -255,6 +258,27 @@ python run_decay.py
 ```
 
 The first run downloads ~10 years of daily price data for ~1,005 Russell 1000 stocks. This takes several minutes. Subsequent runs use cached data and only download new days.
+
+### Paper Trading with Alpaca
+
+```bash
+# 1. Create a free account at https://alpaca.markets
+# 2. Copy your paper trading API keys
+# 3. Create .env file from template
+cp .env.example .env
+# Edit .env with your actual API keys
+
+# Dry run — shows what orders would be placed without executing
+python run_trade.py
+
+# Execute rebalance — actually submits orders to Alpaca paper account
+python run_trade.py --execute
+
+# Track performance — compare paper portfolio vs SPY
+python run_track.py
+```
+
+Run `run_trade.py` at the start of each quarter (Jan, Apr, Jul, Oct) to rebalance. Trade logs are saved to `cache/trade_logs/`.
 
 ### Output
 

@@ -16,6 +16,11 @@ python run_backtest.py
 
 # Experimental weight optimizer (fast numpy proxy, not fully validated)
 python run_optimize.py
+
+# Paper trading (requires .env with Alpaca API keys)
+python run_trade.py              # dry run
+python run_trade.py --execute    # submit orders
+python run_track.py              # track performance vs SPY
 ```
 
 First run is slow (~1,000 tickers × 10 years of price data). Subsequent runs use parquet cache in `cache/` and only fetch new dates.
