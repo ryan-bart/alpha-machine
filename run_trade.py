@@ -6,6 +6,7 @@ submits orders to rebalance to the target 20-stock equal-weight portfolio.
 Usage:
     python run_trade.py              # dry run (show orders, don't execute)
     python run_trade.py --execute    # actually submit orders
+    python run_trade.py --execute --force  # override same-day rebalance guard
 
 Requires .env file with:
     ALPACA_API_KEY=your_key
@@ -221,12 +222,33 @@ def log_rebalance(target_weights, orders, portfolio_value, dry_run):
     print(f"\n   Log saved to {log_file}")
 
 
+def check_already_rebalanced_today():
+    """Check if a rebalance was already executed today. Returns the log path if so."""
+    log_dir = CACHE_DIR / "trade_logs"
+    if not log_dir.exists():
+        return None
+    today = datetime.now().strftime("%Y-%m-%d")
+    for f in log_dir.glob(f"rebalance_{today}_*_executed.md"):
+        return f
+    return None
+
+
 def main():
     dry_run = "--execute" not in sys.argv
+    force = "--force" in sys.argv
     if dry_run:
         print("=== Alpha-Machine: Paper Trade Rebalance (DRY RUN) ===")
         print("    Add --execute to actually submit orders.\n")
     else:
+        # Guard against double execution
+        existing = check_already_rebalanced_today()
+        if existing and not force:
+            print("=== Alpha-Machine: Paper Trade Rebalance (BLOCKED) ===\n")
+            print(f"   ERROR: A rebalance was already executed today:")
+            print(f"     {existing.name}")
+            print(f"\n   Running twice can create duplicate/conflicting orders.")
+            print(f"   If you're sure, re-run with: python run_trade.py --execute --force")
+            sys.exit(1)
         print("=== Alpha-Machine: Paper Trade Rebalance (LIVE) ===\n")
 
     # Connect to Alpaca

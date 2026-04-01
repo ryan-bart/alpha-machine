@@ -274,11 +274,14 @@ python run_trade.py
 # Execute rebalance — actually submits orders to Alpaca paper account
 python run_trade.py --execute
 
+# Override same-day rebalance guard (if you need to re-run after a failed execution)
+python run_trade.py --execute --force
+
 # Track performance — compare paper portfolio vs SPY
 python run_track.py
 ```
 
-Run `run_trade.py` at the start of each quarter (Jan, Apr, Jul, Oct) to rebalance. Trade logs are saved to `cache/trade_logs/`.
+Run `run_trade.py` at the start of each quarter (Jan, Apr, Jul, Oct) to rebalance. Trade logs are saved to `cache/trade_logs/`. A same-day guard prevents accidental double execution — use `--force` to override if needed.
 
 ### Output
 
